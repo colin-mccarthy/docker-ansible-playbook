@@ -1,6 +1,7 @@
-FROM alpine:3.7
+FROM alpine:3.8
 
-ENV ANSIBLE_VERSION 2.5.0
+
+ENV ANSIBLE_VERSION 2.7.1
 
 ENV BUILD_PACKAGES \
   bash \
@@ -19,9 +20,6 @@ ENV BUILD_PACKAGES \
   py-yaml \
   ca-certificates
 
-# If installing ansible@testing
-#RUN \
-#	echo "@testing http://nl.alpinelinux.org/alpine/edge/testing" >> #/etc/apk/repositories
 
 RUN set -x && \
     \
@@ -62,6 +60,36 @@ ENV PYTHONPATH /ansible/lib
 ENV PATH /ansible/bin:$PATH
 ENV ANSIBLE_LIBRARY /ansible/library
 
+ENV ANSIBLE_PASS cisco
+ENV ANSIBLE_USER pi
+
+ENV ANSIBLE_NETWORK_OS ios
+ENV ANSIBLE_CONNECTION network_cli
+
 WORKDIR /ansible/playbooks
 
 ENTRYPOINT ["ansible-playbook"]
+
+
+RUN mkdir -p /home/app
+
+RUN apk --no-cache add curl \
+    && echo "Pulling watchdog binary from Github." \
+    && curl -sSL https://github.com/openfaas/faas/releases/download/0.9.6/fwatchdog > /usr/bin/fwatchdog \
+    && chmod +x /usr/bin/fwatchdog \
+    && cp /usr/bin/fwatchdog /home/app \
+    && apk del curl --no-cache
+
+# Add non root user
+RUN addgroup -S app && adduser app -S -G app
+
+RUN chown app /home/app
+
+WORKDIR /home/app
+
+USER app
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=3s CMD [ -e /tmp/.lock ] || exit 1
+CMD [ "fwatchdog" ]
